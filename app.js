@@ -457,12 +457,12 @@ function welderVsOwner() {
     h('<div class="control-label sub-head">Monthly bills</div>'),
     ...BILLS.map((b) => slider(s, b.key, { label: b.label, min: 0, max: b.max, step: b.step, format: money }, render)),
   );
-  welder.querySelector('.chart-title').textContent = 'Where each month\'s paycheck goes';
   welder.querySelector('.chart-hint').remove();
   welder.appendChild(h(`
     <div class="card note">
       <p class="fine">Pay starts at the US median for welders: about $24.50 an hour (Bureau of Labor Statistics, 2024). Most welders earn between about $18 and $36; experienced pipeline and union welders can earn more.
-      Hours past 40 are overtime at 1.5×. "Taxes" covers federal, state and Social Security together.</p>
+      Hours past 40 are overtime at 1.5×.</p>
+      <p class="fine"><b>Taxes</b> are taken out of every paycheck before you see it: federal income tax, state income tax, and 7.65% for Social Security and Medicare. 22% is a typical total for this pay, and it's lower in states with no income tax.</p>
     </div>`));
 
   // --- owner controls ---
@@ -499,24 +499,32 @@ function welderVsOwner() {
     const pay = welderPay({ hourly: s.wage, hoursPerWeek: s.hours, taxRate: s.tax });
     const bills = BILLS.map((b) => ({ label: b.label, value: s[b.key] }));
     const spent = bills.reduce((a, b) => a + b.value, 0);
-    const left = pay.monthlyTakeHome - spent;
-    setHero(welder, 'Each month you take home', money(pay.monthlyTakeHome), `from <b>${money(pay.yearly)}</b> a year before taxes`);
+    // Work in whole dollars so the numbers on screen add up exactly.
+    const grossMonthly = Math.round(pay.yearly / 12);
+    const takeHome = Math.round(pay.monthlyTakeHome);
+    const taxMonthly = grossMonthly - takeHome;
+    const left = takeHome - spent;
+    setHero(welder, 'Each month you take home', money(takeHome),
+      `You earn <b>${money(grossMonthly)}</b> a month (<b>${money(pay.yearly)}</b> a year), but <b>${money(taxMonthly)}</b> is taken out for taxes before you get paid.`);
     setTiles(welder, [
-      { label: 'Bills each month', value: money(spent) },
+      { label: 'Pay before taxes', value: money(grossMonthly), sub: `${money(pay.yearly)} a year` },
+      { label: '🏛️ Taxes', value: `−${money(taxMonthly)}`, sub: `${s.tax}% of your pay` },
+      { label: 'Bills', value: `−${money(spent)}`, sub: `${BILLS.length} monthly bills` },
       left >= 0
-        ? { label: 'Left over', value: money(left), sub: `${Math.round((left / pay.monthlyTakeHome) * 100)}% of your pay`, cls: 'good' }
+        ? { label: 'Left over', value: money(left), sub: `${Math.round((left / takeHome) * 100)}% of take-home`, cls: 'good' }
         : { label: '⚠️ Short each month', value: money(-left), sub: 'spending more than you earn', cls: 'bad' },
     ]);
+    welder.querySelector('.chart-title').textContent = `Where each month's ${money(grossMonthly)} goes`;
 
-    // Horizontal bars, biggest bill first, as a share of take-home pay.
-    const scale = Math.max(pay.monthlyTakeHome, spent);
+    // Horizontal bars as a share of pay before taxes: taxes first, then bills (biggest first).
+    const scale = Math.max(grossMonthly, taxMonthly + spent);
     const rows = [...bills].sort((a, b) => b.value - a.value).filter((b) => b.value > 0);
     const bar = (label, value, cls = '') => `
       <div class="hbar ${cls}">
         <div class="hbar-top"><span>${label}</span><b>${money(value)}</b></div>
         <div class="hbar-track"><div class="hbar-fill" style="width:${Math.max(0.5, (Math.abs(value) / scale) * 100)}%"></div></div>
       </div>`;
-    welder.querySelector('.chart-box').innerHTML = `<div class="hbars">${rows.map((r) => bar(r.label, r.value)).join('')}${
+    welder.querySelector('.chart-box').innerHTML = `<div class="hbars">${bar(`🏛️ Taxes (${s.tax}%)`, taxMonthly, 'tax')}${rows.map((r) => bar(r.label, r.value)).join('')}${
       left >= 0 ? bar('✅ Left over to save', left, 'left') : bar('⚠️ Short (goes on a credit card)', -left, 'short')
     }</div>`;
 
