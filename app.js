@@ -1,14 +1,15 @@
-import { growthByAge, amortize, payDownCard, habitByYear, FREQUENCIES, CARD_MIN_FLOOR, CARD_MIN_PERCENT } from './finance.js';
+import { growthByAge, amortize, payDownCard, habitByYear, FREQUENCIES, CARD_MIN_FLOOR, CARD_MIN_PERCENT, welderPay, contractorYear } from './finance.js';
 import { lineChart, stackedBars, cssVar, clearActive } from './charts.js';
 
 // ---------- formatting ----------
-const money = (v) => '$' + Math.round(v).toLocaleString('en-US');
+const money = (v) => (v < -0.5 ? '−$' : '$') + Math.abs(Math.round(v)).toLocaleString('en-US');
 const moneyCents = (v) => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function moneyShort(v) {
   const a = Math.abs(v);
-  if (a >= 1e6) return '$' + +(v / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M';
-  if (a >= 1e3) return '$' + +(v / 1e3).toFixed(a >= 1e4 ? 0 : 1) + 'k';
-  return '$' + Math.round(v);
+  const sign = v < -0.5 ? '−$' : '$';
+  if (a >= 1e6) return sign + +(a / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M';
+  if (a >= 1e3) return sign + +(a / 1e3).toFixed(a >= 1e4 ? 0 : 1) + 'k';
+  return sign + Math.round(a);
 }
 function duration(months) {
   const y = Math.floor(months / 12);
@@ -389,12 +390,207 @@ function habits() {
   return { root, draw };
 }
 
+// ---------- Topic 5: Welder vs. owner ----------
+const BILLS = [
+  { key: 'housing', label: 'Mortgage or rent', max: 3000, step: 50, value: 1200 },
+  { key: 'carLoan', label: 'Car loan', max: 1000, step: 10, value: 450 },
+  { key: 'carCosts', label: 'Car insurance & gas', max: 800, step: 10, value: 300 },
+  { key: 'groceries', label: 'Groceries', max: 1000, step: 25, value: 400 },
+  { key: 'eatingOut', label: 'Eating out', max: 800, step: 10, value: 200 },
+  { key: 'phone', label: 'Phone & internet', max: 400, step: 10, value: 120 },
+  { key: 'utilities', label: 'Power, water & heat', max: 500, step: 10, value: 180 },
+  { key: 'fun', label: 'Fun & everything else', max: 1000, step: 10, value: 200 },
+];
+const OWNER_TAX = 30;
+const SLOW_YEAR = 70; // % of normal work in a slow year
+
+function welderVsOwner() {
+  const s = {
+    view: 'welder',
+    // welder
+    wage: 24.5, hours: 40, tax: 22,
+    ...Object.fromEntries(BILLS.map((b) => [b.key, b.value])),
+    // owner
+    welders: 5, billRate: 85, billable: 32, burden: 30, overhead: 12000, year: 'normal',
+  };
+  const root = h(`
+    <section class="topic">
+      <p class="intro">Same trade, two paths. Work as a welder for an hourly wage, or own a company that hires welders and sends them out on jobs.</p>
+    </section>`);
+  const welder = topicLayout('Can a welder\'s paycheck cover real life? Set the pay, then the monthly bills.');
+  const owner = topicLayout('The owner finds customers, bills them for each welder\'s hours, and pays the crew, the shop and the trucks. What\'s left is the owner\'s.');
+  const render = scheduler(draw);
+
+  const viewToggle = segmented(
+    [{ value: 'welder', label: '👷 Welder' }, { value: 'owner', label: '🏢 Owner' }],
+    s.view,
+    (v) => { s.view = v; clearActive(); render(); },
+  );
+  root.append(viewToggle, welder, owner);
+
+  // Wage slider appears in both views; keep both copies in sync.
+  const wageSliders = [];
+  const wageSlider = (label) => {
+    const sl = slider(s, 'wage', { label, min: 18, max: 50, step: 0.5, format: (v) => `${moneyCents(v)}/hr` }, () => {
+      wageSliders.forEach((o) => o !== sl && o.set({ value: s.wage }));
+      render();
+    });
+    wageSliders.push(sl);
+    return sl;
+  };
+
+  // --- welder controls ---
+  welder.querySelector('.controls').append(
+    wageSlider('Hourly pay'),
+    slider(s, 'hours', { label: 'Hours a week', min: 20, max: 60, step: 1, format: (v) => (v > 40 ? `${v} (${v - 40} overtime)` : `${v}`) }, render),
+    slider(s, 'tax', { label: 'Taxes taken out', min: 10, max: 35, step: 1, format: (v) => `${v}%` }, render),
+    h('<div class="control-label sub-head">Monthly bills</div>'),
+    ...BILLS.map((b) => slider(s, b.key, { label: b.label, min: 0, max: b.max, step: b.step, format: money }, render)),
+  );
+  welder.querySelector('.chart-title').textContent = 'Where each month\'s paycheck goes';
+  welder.querySelector('.chart-hint').remove();
+  welder.appendChild(h(`
+    <div class="card note">
+      <p class="fine">Pay starts at the US median for welders: about $24.50 an hour (Bureau of Labor Statistics, 2024). Most welders earn between about $18 and $36; experienced pipeline and union welders can earn more.
+      Hours past 40 are overtime at 1.5×. "Taxes" covers federal, state and Social Security together.</p>
+    </div>`));
+
+  // --- owner controls ---
+  const yearToggle = segmented(
+    [{ value: 'normal', label: 'Normal year' }, { value: 'slow', label: `Slow year (−${100 - SLOW_YEAR}%)` }],
+    s.year,
+    (v) => { s.year = v; render(); },
+  );
+  owner.querySelector('.controls').append(
+    slider(s, 'welders', { label: 'Welders on your crew', min: 1, max: 20, step: 1, format: (v) => v }, render),
+    slider(s, 'billRate', { label: 'You charge customers', min: 50, max: 150, step: 5, format: (v) => `${money(v)}/hr` }, render),
+    slider(s, 'billable', { label: 'Hours billed per welder each week', min: 20, max: 40, step: 1, format: (v) => `${v} of 40` }, render),
+    wageSlider('You pay each welder'),
+    slider(s, 'burden', { label: 'Extra cost per worker', min: 15, max: 50, step: 1, format: (v) => `+${v}%` }, render),
+    slider(s, 'overhead', { label: 'Shop, trucks & insurance', min: 2000, max: 50000, step: 500, format: (v) => `${money(v)}/mo` }, render),
+    h('<div class="control-label">What kind of year?</div>'),
+    yearToggle,
+  );
+  owner.querySelector('.chart-title').textContent = 'Owner\'s take-home by crew size';
+  owner.appendChild(h(`
+    <div class="card note">
+      <p class="fine">You pay welders for all 40 hours, even the ones you can't bill (driving, setup, waiting on parts).
+      "Extra cost per worker" is payroll taxes, workers' comp and benefits on top of wages. The owner's take-home assumes about ${OWNER_TAX}% in taxes.</p>
+    </div>`));
+
+  const welderYearTakeHome = () => welderPay({ hourly: s.wage, hoursPerWeek: s.hours, taxRate: s.tax }).monthlyTakeHome * 12;
+  const ownerYear = (welders, workLevel) => contractorYear({
+    welders, billRate: s.billRate, billableHours: s.billable, wage: s.wage, burden: s.burden,
+    overhead: s.overhead, ownerTaxRate: OWNER_TAX, workLevel,
+  });
+
+  function drawWelder() {
+    const pay = welderPay({ hourly: s.wage, hoursPerWeek: s.hours, taxRate: s.tax });
+    const bills = BILLS.map((b) => ({ label: b.label, value: s[b.key] }));
+    const spent = bills.reduce((a, b) => a + b.value, 0);
+    const left = pay.monthlyTakeHome - spent;
+    setHero(welder, 'Each month you take home', money(pay.monthlyTakeHome), `from <b>${money(pay.yearly)}</b> a year before taxes`);
+    setTiles(welder, [
+      { label: 'Bills each month', value: money(spent) },
+      left >= 0
+        ? { label: 'Left over', value: money(left), sub: `${Math.round((left / pay.monthlyTakeHome) * 100)}% of your pay`, cls: 'good' }
+        : { label: '⚠️ Short each month', value: money(-left), sub: 'spending more than you earn', cls: 'bad' },
+    ]);
+
+    // Horizontal bars, biggest bill first, as a share of take-home pay.
+    const scale = Math.max(pay.monthlyTakeHome, spent);
+    const rows = [...bills].sort((a, b) => b.value - a.value).filter((b) => b.value > 0);
+    const bar = (label, value, cls = '') => `
+      <div class="hbar ${cls}">
+        <div class="hbar-top"><span>${label}</span><b>${money(value)}</b></div>
+        <div class="hbar-track"><div class="hbar-fill" style="width:${Math.max(0.5, (Math.abs(value) / scale) * 100)}%"></div></div>
+      </div>`;
+    welder.querySelector('.chart-box').innerHTML = `<div class="hbars">${rows.map((r) => bar(r.label, r.value)).join('')}${
+      left >= 0 ? bar('✅ Left over to save', left, 'left') : bar('⚠️ Short (goes on a credit card)', -left, 'short')
+    }</div>`;
+
+    if (left > 0) {
+      const at65 = growthByAge({ monthly: left, annualRate: 7, startAge: 25, fromAge: 25 }).at(-1).balance;
+      setTakeaway(welder, `If you invest that <b>${money(left)}</b> a month from age 25 to 65 (at 7%), you'd retire with about <b>${money(at65)}</b>. Every bill you shrink, like a cheaper car or less eating out, makes that number bigger.`);
+    } else if (left === 0) {
+      setTakeaway(welder, 'Every dollar is spent, so nothing is left for savings or emergencies. One surprise bill and it goes on a credit card. Trim something.');
+    } else {
+      setTakeaway(welder, `You're spending <b>${money(-left)}</b> more than you earn every month, <b>${money(-left * 12)}</b> a year. That gap ends up on a credit card at 24% interest (see the Credit Card Trap). Cheaper housing, a cheaper car or less eating out fixes it.`);
+    }
+  }
+
+  function drawOwner() {
+    const cs = colors();
+    const workLevel = s.year === 'slow' ? SLOW_YEAR : 100;
+    const y = ownerYear(s.welders, workLevel);
+    const welderTH = welderYearTakeHome();
+    const label = s.year === 'slow' ? `In a slow year (${100 - SLOW_YEAR}% less work), you take home` : 'As owner, you take home';
+    if (y.takeHome >= 0) {
+      setHero(owner, label, `${money(y.takeHome)}`, `a year after taxes. One of your welders takes home about <b>${money(welderTH)}</b>.`);
+    } else {
+      setHero(owner, s.year === 'slow' ? 'In a slow year, the company' : 'The company', `loses ${money(-y.takeHome)}`, 'this year, and that comes out of the owner\'s savings. The welders still get paid.');
+    }
+    setTiles(owner, [
+      { label: 'Money in from customers', value: moneyShort(y.revenue) },
+      { label: 'Crew pay & worker costs', value: moneyShort(y.labor) },
+      { label: 'Shop, trucks & insurance', value: moneyShort(y.fixed) },
+      y.profit >= 0
+        ? { label: 'Profit before taxes', value: moneyShort(y.profit), cls: 'good' }
+        : { label: '⚠️ Loss', value: moneyShort(-y.profit), cls: 'bad' },
+    ]);
+
+    const xs = Array.from({ length: 20 }, (_, i) => i + 1);
+    lineChart(owner.querySelector('.chart-box'), {
+      xs,
+      series: [
+        { name: 'Owner, normal year', color: cs[0], values: xs.map((n) => ownerYear(n, 100).takeHome) },
+        { name: `Owner, slow year`, color: cs[1], values: xs.map((n) => ownerYear(n, SLOW_YEAR).takeHome) },
+        { name: 'One welder', color: cs[2], values: xs.map(() => welderTH) },
+      ],
+      yFormat: moneyShort,
+      tipFormat: money,
+      xUnit: 1,
+      xRoundTicks: true,
+      xFormat: (n) => `${n}`,
+      tipTitle: (n) => `Crew of ${n} welder${n === 1 ? '' : 's'}`,
+      ariaLabel: 'Line chart of owner take-home by crew size in a normal and slow year, compared with one welder',
+    });
+    owner.querySelector('.chart-hint').textContent = 'Bottom numbers = welders on the crew. Touch the chart for exact numbers.';
+
+    const normal = ownerYear(s.welders, 100).takeHome;
+    const slow = ownerYear(s.welders, SLOW_YEAR).takeHome;
+    const breakEven = xs.find((n) => ownerYear(n, 100).takeHome > welderTH);
+    let msg;
+    if (normal > welderTH) {
+      msg = `With <b>${s.welders}</b> welders, a normal year pays the owner about <b>${(normal / welderTH).toFixed(1)}×</b> what a welder takes home. `
+        + (slow < 0
+          ? `But in a slow year the company <b>loses ${money(-slow)}</b>, and the crew, the shop and the trucks still have to be paid. `
+          : `In a slow year that drops to <b>${money(slow)}</b>, and the crew, the shop and the trucks still have to be paid. `)
+        + 'Owners earn more because they take the risk, win the jobs and run everything. Most start as skilled welders first.';
+    } else {
+      msg = breakEven
+        ? `With only <b>${s.welders}</b> welder${s.welders === 1 ? '' : 's'}, the shop and trucks eat most of the profit. You'd need about <b>${breakEven}</b> welders to beat a welder's paycheck in a normal year.`
+        : 'With these numbers, owning never beats a welder\'s paycheck. Try charging customers more or cutting overhead. That\'s exactly the math real owners do.';
+    }
+    setTakeaway(owner, msg);
+  }
+
+  function draw() {
+    welder.hidden = s.view !== 'welder';
+    owner.hidden = s.view !== 'owner';
+    if (s.view === 'welder') drawWelder();
+    else drawOwner();
+  }
+  return { root, draw };
+}
+
 // ---------- routing ----------
 const TOPICS = {
   early: { title: 'Start Early', emoji: '🚀', blurb: 'Why starting at 15 beats starting at 25', make: startEarly },
   loans: { title: 'Loans', emoji: '🚗', blurb: 'What a car, college or house really costs', make: loans },
   cards: { title: 'The Credit Card Trap', emoji: '💳', blurb: 'Why the "minimum payment" is a trap', make: creditCards },
   habits: { title: 'Small Habits Add Up', emoji: '☕', blurb: 'What $5 a day really costs you', make: habits },
+  welder: { title: 'Welder vs. Owner', emoji: '👷', blurb: 'A welder\'s paycheck vs. owning the company', make: welderVsOwner },
 };
 
 const app = document.getElementById('app');

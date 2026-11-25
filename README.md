@@ -6,6 +6,7 @@ A small phone-friendly web app that shows, with sliders and charts:
 2. **Loans**: what a car, student loan or mortgage really costs in interest, and what extra payments save.
 3. **The Credit Card Trap**: how long the "minimum payment" takes, compared with fixed payments.
 4. **Small Habits Add Up**: what a daily or weekly habit would grow to if invested instead.
+5. **Welder vs. Owner**: a welder's paycheck against real monthly bills, compared with owning a company that contracts welders.
 
 Plain HTML/CSS/JavaScript with no build step and no dependencies. It works offline once loaded.
 

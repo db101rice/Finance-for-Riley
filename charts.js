@@ -15,14 +15,16 @@ export function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-/** "Nice" axis ticks from 0 to at least `max`. */
-function niceTicks(max, count = 4) {
-  if (!(max > 0)) return [0, 1];
-  const raw = max / count;
+/** "Nice" axis ticks covering `min` (0 or below) to `max`, always including 0. */
+function niceTicks(max, min = 0, count = 4) {
+  min = Math.min(0, min);
+  max = Math.max(0, max);
+  if (!(max - min > 0)) return [0, 1];
+  const raw = (max - min) / count;
   const mag = Math.pow(10, Math.floor(Math.log10(raw)));
   const step = [1, 2, 2.5, 5, 10].map((f) => f * mag).find((s) => s >= raw);
   const ticks = [];
-  for (let v = 0; v <= max + step * 0.999; v += step) ticks.push(v);
+  for (let v = Math.floor(min / step) * step; v <= max + step * 0.999; v += step) ticks.push(Math.abs(v) < 1e-9 ? 0 : v);
   return ticks;
 }
 
@@ -86,11 +88,12 @@ function bindHover(hit, move, reset) {
   });
 }
 
-function axes(svg, { width, yMax, yFormat, xTicks }) {
+function axes(svg, { width, yMax, yMin = 0, yFormat, xTicks }) {
   const plotH = HEIGHT - M.top - M.bottom;
-  const ticks = niceTicks(yMax);
+  const ticks = niceTicks(yMax, yMin);
   const top = ticks[ticks.length - 1];
-  const y = (v) => M.top + plotH - (v / top) * plotH;
+  const bottom = ticks[0];
+  const y = (v) => M.top + plotH - ((v - bottom) / (top - bottom)) * plotH;
   const g = el('g', { class: 'axis' }, svg);
   for (const t of ticks) {
     el('line', { x1: M.left, x2: width - M.right, y1: y(t), y2: y(t), class: t === 0 ? 'baseline' : 'grid' }, g);
@@ -122,15 +125,23 @@ export function lineChart(container, opts) {
   const xMax = xs[xs.length - 1];
   const plotW = width - M.left - M.right;
   const x = (v) => M.left + ((v - xMin) / (xMax - xMin || 1)) * plotW;
-  const yMax = Math.max(...series.flatMap((s) => s.values.filter((v) => v != null)));
+  const all = series.flatMap((s) => s.values.filter((v) => v != null));
+  const yMax = Math.max(...all);
+  const yMin = Math.min(0, ...all);
 
   // Round tick spacing (e.g. every 10 years), at most ~6 ticks.
   const unit = opts.xUnit || 1;
   const span = (xMax - xMin) / unit;
   const step = unit * ([1, 2, 5, 10, 20, 50, 100].find((s) => span / s <= 5) || 100);
   const xTicks = [];
-  for (let v = xMin; v <= xMax + 1e-9; v += step) xTicks.push({ x: x(v), label: opts.xFormat(v) });
-  const y = axes(svg, { width, yMax, yFormat: opts.yFormat, xTicks });
+  if (opts.xRoundTicks) {
+    // Ticks on round numbers (5, 10, 15…) plus the first value.
+    xTicks.push({ x: x(xMin), label: opts.xFormat(xMin) });
+    for (let v = Math.ceil((xMin + step / 2) / step) * step; v <= xMax + 1e-9; v += step) xTicks.push({ x: x(v), label: opts.xFormat(v) });
+  } else {
+    for (let v = xMin; v <= xMax + 1e-9; v += step) xTicks.push({ x: x(v), label: opts.xFormat(v) });
+  }
+  const y = axes(svg, { width, yMax, yMin, yFormat: opts.yFormat, xTicks });
 
   for (const s of series) {
     const pts = s.values.map((v, i) => (v == null ? null : `${x(xs[i]).toFixed(1)},${y(v).toFixed(1)}`)).filter(Boolean);

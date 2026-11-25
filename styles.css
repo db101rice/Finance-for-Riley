@@ -11,6 +11,9 @@
   --accent-soft: #e8f1fc;
   --good: #006c10;
   --good-soft: #e6f4e8;
+  --good-bar: #0aac23;
+  --bad: #dc3c3d;
+  --bad-soft: #fdecec;
   --track: #e2e2e2;
   --series-1: #257de0;
   --series-2: #f47230;
@@ -32,6 +35,9 @@
     --accent-soft: #15263b;
     --good: #53c556;
     --good-soft: #15291a;
+    --good-bar: #0aac23;
+    --bad: #eb6263;
+    --bad-soft: #2e1616;
     --track: #333333;
     --series-1: #338ced;
     --series-2: #e76624;
@@ -190,6 +196,7 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin-bottom: 16px; }
 .tile { background: var(--page); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
 .tile.wide { grid-column: 1 / -1; }
+.tiles:has(> :nth-child(4):last-child) { grid-template-columns: 1fr 1fr; }
 .tile.selected { border: 2px solid var(--accent); padding: 9px 11px; }
 .tile.good { background: var(--good-soft); }
 .tile.good .tile-value { color: var(--good); }
@@ -244,3 +251,19 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 .note p:last-child { margin-bottom: 0; }
 .note b { color: var(--text); }
 .note .fine { font-size: 13px; }
+
+/* welder vs owner */
+.topic[hidden] { display: none; }
+.sub-head { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--border); }
+.tile.bad { background: var(--bad-soft); }
+.tile.bad .tile-value { color: var(--bad); }
+.hbars { display: grid; gap: 10px; }
+.hbar-top { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px; }
+.hbar-top span { color: var(--text-2); }
+.hbar-track { height: 10px; border-radius: 5px; background: var(--track); overflow: hidden; }
+.hbar-fill { height: 100%; border-radius: 5px; background: var(--series-1); }
+.hbar.left .hbar-fill { background: var(--good-bar); }
+.hbar.short .hbar-fill { background: var(--bad); }
+.hbar.left .hbar-top b { color: var(--good); }
+.hbar.short .hbar-top b { color: var(--bad); }
+.hbar.left, .hbar.short { padding-top: 10px; border-top: 1px solid var(--border); }

@@ -107,3 +107,32 @@ export function habitByYear({ cost, frequency, annualRate, years }) {
   }
   return { monthly, points };
 }
+
+// ---------- Welder vs. owner ----------
+
+/**
+ * A welder's paycheck: yearly pay before tax, and monthly take-home after tax.
+ * Hours past 40 a week are overtime, paid at 1.5×.
+ */
+export function welderPay({ hourly, hoursPerWeek, taxRate }) {
+  const weekly = hourly * Math.min(hoursPerWeek, 40) + hourly * 1.5 * Math.max(0, hoursPerWeek - 40);
+  const yearly = weekly * 52;
+  return { yearly, monthlyTakeHome: (yearly * (1 - taxRate / 100)) / 12 };
+}
+
+/**
+ * One year of a welding contractor business.
+ * - Clients are billed `billRate` for each billable hour.
+ * - Each welder is paid `wage` for a full 40-hour week whether or not that
+ *   time is billed, plus `burden`% on top (payroll taxes, insurance, workers' comp).
+ * - `overhead` is the monthly cost of the shop, trucks, rigs, insurance and office.
+ * - `workLevel` is the % of a normal year's work (e.g. 70 in a slow year).
+ */
+export function contractorYear({ welders, billRate, billableHours, wage, burden, overhead, ownerTaxRate, workLevel = 100 }) {
+  const revenue = welders * billRate * billableHours * 52 * (workLevel / 100);
+  const labor = welders * wage * 40 * 52 * (1 + burden / 100);
+  const fixed = overhead * 12;
+  const profit = revenue - labor - fixed;
+  const takeHome = profit > 0 ? profit * (1 - ownerTaxRate / 100) : profit;
+  return { revenue, labor, fixed, profit, takeHome };
+}
