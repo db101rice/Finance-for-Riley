@@ -428,21 +428,31 @@ function welderVsOwner() {
   );
   root.append(viewToggle, welder, owner);
 
-  // Wage slider appears in both views; keep both copies in sync.
-  const wageSliders = [];
-  const wageSlider = (label) => {
-    const sl = slider(s, 'wage', { label, min: 18, max: 50, step: 0.5, format: (v) => `${moneyCents(v)}/hr` }, () => {
-      wageSliders.forEach((o) => o !== sl && o.set({ value: s.wage }));
+  // Pay and hours appear in both views and are the same welders, so each
+  // copy of those sliders stays in sync with the other.
+  const copies = {};
+  const shared = (key, opts, afterChange = () => {}) => {
+    const sl = slider(s, key, opts, () => {
+      copies[key].forEach((o) => o !== sl && o.set({ value: s[key] }));
+      afterChange();
       render();
     });
-    wageSliders.push(sl);
+    (copies[key] ||= []).push(sl);
     return sl;
   };
+  const wageSlider = (label) => shared('wage', { label, min: 18, max: 50, step: 0.5, format: (v) => `${moneyCents(v)}/hr` });
+  // Can't bill more hours than the crew works.
+  let billableSlider;
+  const hoursSlider = (label) => shared(
+    'hours',
+    { label, min: 20, max: 60, step: 1, format: (v) => (v > 40 ? `${v} (${v - 40} overtime)` : `${v}`) },
+    () => billableSlider.set({ max: s.hours }),
+  );
 
   // --- welder controls ---
   welder.querySelector('.controls').append(
     wageSlider('Hourly pay'),
-    slider(s, 'hours', { label: 'Hours a week', min: 20, max: 60, step: 1, format: (v) => (v > 40 ? `${v} (${v - 40} overtime)` : `${v}`) }, render),
+    hoursSlider('Hours a week'),
     slider(s, 'tax', { label: 'Taxes taken out', min: 10, max: 35, step: 1, format: (v) => `${v}%` }, render),
     h('<div class="control-label sub-head">Monthly bills</div>'),
     ...BILLS.map((b) => slider(s, b.key, { label: b.label, min: 0, max: b.max, step: b.step, format: money }, render)),
@@ -464,8 +474,9 @@ function welderVsOwner() {
   owner.querySelector('.controls').append(
     slider(s, 'welders', { label: 'Welders on your crew', min: 1, max: 20, step: 1, format: (v) => v }, render),
     slider(s, 'billRate', { label: 'You charge customers', min: 50, max: 150, step: 5, format: (v) => `${money(v)}/hr` }, render),
-    slider(s, 'billable', { label: 'Hours billed per welder each week', min: 20, max: 40, step: 1, format: (v) => `${v} of 40` }, render),
     wageSlider('You pay each welder'),
+    hoursSlider('Hours each welder works a week'),
+    billableSlider = slider(s, 'billable', { label: 'Hours you can bill customers', min: 10, max: 40, step: 1, format: (v) => `${v} of ${s.hours}` }, render),
     slider(s, 'burden', { label: 'Extra cost per worker', min: 15, max: 50, step: 1, format: (v) => `+${v}%` }, render),
     slider(s, 'overhead', { label: 'Shop, trucks & insurance', min: 2000, max: 50000, step: 500, format: (v) => `${money(v)}/mo` }, render),
     h('<div class="control-label">What kind of year?</div>'),
@@ -474,12 +485,13 @@ function welderVsOwner() {
   owner.querySelector('.chart-title').textContent = 'Take-home after taxes, by crew size';
   owner.appendChild(h(`
     <div class="card note">
-      <p class="fine">You pay welders for all 40 hours, even the ones you can't bill (driving, setup, waiting on parts).
+      <p class="fine">Pay and hours are the same welders as on the Welder side, so changing them on either side changes both.
+      You pay welders for every hour they work (overtime past 40 at 1.5×), even the hours you can't bill (driving, setup, waiting on parts).
       "Extra cost per worker" is payroll taxes, workers' comp and benefits on top of wages. The owner's take-home assumes about ${OWNER_TAX}% in taxes.</p>
     </div>`));
 
   const ownerYear = (welders, workLevel) => contractorYear({
-    welders, billRate: s.billRate, billableHours: s.billable, wage: s.wage, burden: s.burden,
+    welders, billRate: s.billRate, billableHours: s.billable, wage: s.wage, hoursPerWeek: s.hours, burden: s.burden,
     overhead: s.overhead, ownerTaxRate: OWNER_TAX, workLevel,
   });
 
@@ -522,9 +534,10 @@ function welderVsOwner() {
     const cs = colors();
     const workLevel = s.year === 'slow' ? SLOW_YEAR : 100;
     const y = ownerYear(s.welders, workLevel);
-    // The owner pays each welder for a 40-hour week (no overtime).
-    const welderGross = welderPay({ hourly: s.wage, hoursPerWeek: 40, taxRate: s.tax }).yearly;
-    const welderTH = welderGross * (1 - s.tax / 100);
+    // Exactly the same welder as on the Welder side.
+    const pay = welderPay({ hourly: s.wage, hoursPerWeek: s.hours, taxRate: s.tax });
+    const welderGross = pay.yearly;
+    const welderTH = pay.monthlyTakeHome * 12;
     const label = s.year === 'slow' ? `In a slow year (${100 - SLOW_YEAR}% less work), you take home` : 'As owner, you take home';
     if (y.takeHome >= 0) {
       setHero(owner, label, `${money(y.takeHome)}`, `a year after taxes. Each of your welders earns <b>${money(welderGross)}</b>, which is <b>${money(welderTH)}</b> after their taxes.`);

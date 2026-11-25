@@ -123,14 +123,16 @@ export function welderPay({ hourly, hoursPerWeek, taxRate }) {
 /**
  * One year of a welding contractor business.
  * - Clients are billed `billRate` for each billable hour.
- * - Each welder is paid `wage` for a full 40-hour week whether or not that
- *   time is billed, plus `burden`% on top (payroll taxes, insurance, workers' comp).
+ * - Each welder is paid `wage` for every hour worked (`hoursPerWeek`, overtime
+ *   past 40 at 1.5×, exactly as in welderPay) whether or not that time is
+ *   billed, plus `burden`% on top (payroll taxes, insurance, workers' comp).
  * - `overhead` is the monthly cost of the shop, trucks, rigs, insurance and office.
  * - `workLevel` is the % of a normal year's work (e.g. 70 in a slow year).
  */
-export function contractorYear({ welders, billRate, billableHours, wage, burden, overhead, ownerTaxRate, workLevel = 100 }) {
+export function contractorYear({ welders, billRate, billableHours, wage, hoursPerWeek = 40, burden, overhead, ownerTaxRate, workLevel = 100 }) {
   const revenue = welders * billRate * billableHours * 52 * (workLevel / 100);
-  const labor = welders * wage * 40 * 52 * (1 + burden / 100);
+  const payPerWelder = welderPay({ hourly: wage, hoursPerWeek, taxRate: 0 }).yearly;
+  const labor = welders * payPerWelder * (1 + burden / 100);
   const fixed = overhead * 12;
   const profit = revenue - labor - fixed;
   const takeHome = profit > 0 ? profit * (1 - ownerTaxRate / 100) : profit;
