@@ -471,14 +471,13 @@ function welderVsOwner() {
     h('<div class="control-label">What kind of year?</div>'),
     yearToggle,
   );
-  owner.querySelector('.chart-title').textContent = 'Owner\'s take-home by crew size';
+  owner.querySelector('.chart-title').textContent = 'Take-home after taxes, by crew size';
   owner.appendChild(h(`
     <div class="card note">
       <p class="fine">You pay welders for all 40 hours, even the ones you can't bill (driving, setup, waiting on parts).
       "Extra cost per worker" is payroll taxes, workers' comp and benefits on top of wages. The owner's take-home assumes about ${OWNER_TAX}% in taxes.</p>
     </div>`));
 
-  const welderYearTakeHome = () => welderPay({ hourly: s.wage, hoursPerWeek: s.hours, taxRate: s.tax }).monthlyTakeHome * 12;
   const ownerYear = (welders, workLevel) => contractorYear({
     welders, billRate: s.billRate, billableHours: s.billable, wage: s.wage, burden: s.burden,
     overhead: s.overhead, ownerTaxRate: OWNER_TAX, workLevel,
@@ -523,16 +522,18 @@ function welderVsOwner() {
     const cs = colors();
     const workLevel = s.year === 'slow' ? SLOW_YEAR : 100;
     const y = ownerYear(s.welders, workLevel);
-    const welderTH = welderYearTakeHome();
+    // The owner pays each welder for a 40-hour week (no overtime).
+    const welderGross = welderPay({ hourly: s.wage, hoursPerWeek: 40, taxRate: s.tax }).yearly;
+    const welderTH = welderGross * (1 - s.tax / 100);
     const label = s.year === 'slow' ? `In a slow year (${100 - SLOW_YEAR}% less work), you take home` : 'As owner, you take home';
     if (y.takeHome >= 0) {
-      setHero(owner, label, `${money(y.takeHome)}`, `a year after taxes. One of your welders takes home about <b>${money(welderTH)}</b>.`);
+      setHero(owner, label, `${money(y.takeHome)}`, `a year after taxes. Each of your welders earns <b>${money(welderGross)}</b>, which is <b>${money(welderTH)}</b> after their taxes.`);
     } else {
       setHero(owner, s.year === 'slow' ? 'In a slow year, the company' : 'The company', `loses ${money(-y.takeHome)}`, 'this year, and that comes out of the owner\'s savings. The welders still get paid.');
     }
     setTiles(owner, [
       { label: 'Money in from customers', value: moneyShort(y.revenue) },
-      { label: 'Crew pay & worker costs', value: moneyShort(y.labor) },
+      { label: 'Crew pay & worker costs', value: moneyShort(y.labor), sub: `${s.welders} × (${moneyShort(welderGross)} pay + ${s.burden}%)` },
       { label: 'Shop, trucks & insurance', value: moneyShort(y.fixed) },
       y.profit >= 0
         ? { label: 'Profit before taxes', value: moneyShort(y.profit), cls: 'good' }
@@ -545,7 +546,7 @@ function welderVsOwner() {
       series: [
         { name: 'Owner, normal year', color: cs[0], values: xs.map((n) => ownerYear(n, 100).takeHome) },
         { name: `Owner, slow year`, color: cs[1], values: xs.map((n) => ownerYear(n, SLOW_YEAR).takeHome) },
-        { name: 'One welder', color: cs[2], values: xs.map(() => welderTH) },
+        { name: 'One welder (after taxes)', color: cs[2], values: xs.map(() => welderTH) },
       ],
       yFormat: moneyShort,
       tipFormat: money,
