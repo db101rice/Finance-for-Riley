@@ -146,10 +146,20 @@ export function lineChart(container, opts) {
     }).sort((a, b) => a.py - b.py);
     let last = -Infinity;
     for (const e of ends) {
-      const ly = Math.max(e.py - 8, last + 16, M.top - 6);
+      const ly = Math.max(e.py - 10, last + 22, M.top - 4);
       last = ly;
-      const t = el('text', { x: width - M.right, y: ly, 'text-anchor': 'end', class: 'direct-label' }, svg);
+      // Solid backing pill behind the text (text halos via `paint-order`
+      // render inconsistently on mobile browsers).
+      const g = el('g', {}, svg);
+      const bg = el('rect', { class: 'direct-label-bg', rx: 5 }, g);
+      const t = el('text', { x: width - M.right - 4, y: ly, 'text-anchor': 'end', class: 'direct-label' }, g);
       t.textContent = opts.yFormat(e.v);
+      const bb = t.getBBox();
+      bg.setAttribute('x', bb.x - 4);
+      bg.setAttribute('y', bb.y - 2);
+      bg.setAttribute('width', bb.width + 8);
+      bg.setAttribute('height', bb.height + 4);
+      bg.setAttribute('stroke', e.s.color);
     }
   }
 

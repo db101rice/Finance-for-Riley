@@ -206,10 +206,11 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--text-2); margin-bottom: 6px; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i, .tooltip i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
-.axis text { font-size: 11px; fill: var(--text-2); font-variant-numeric: tabular-nums; }
+.axis text { font-size: 12px; fill: var(--text-2); font-variant-numeric: tabular-nums; }
 .axis .grid { stroke: var(--grid); stroke-width: 1; }
 .baseline { stroke: var(--axis); stroke-width: 1; }
-.direct-label { font-size: 12px; font-weight: 700; fill: var(--text); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.direct-label { font-size: 13px; font-weight: 700; fill: var(--text); }
+.direct-label-bg { fill: var(--surface); stroke-width: 1.5; }
 .crosshair { stroke: var(--text-2); stroke-width: 1; stroke-dasharray: 3 3; }
 .dot { stroke: var(--surface); stroke-width: 2; }
 .empty { color: var(--text-2); text-align: center; padding: 40px 10px; margin: 0; }

@@ -1,5 +1,5 @@
 // Offline support: serve the app from cache, refresh the cache in the background.
-const CACHE = 'money-lab-v1';
+const CACHE = 'money-lab-v2';
 const FILES = [
   './', 'index.html', 'styles.css', 'app.js', 'charts.js', 'finance.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
