@@ -440,6 +440,21 @@ window.addEventListener('resize', () => {
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => current && current.draw());
 route();
 
-if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  navigator.serviceWorker.register('sw.js');
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    // Home-screen apps often resume without reloading, so check for a new
+    // version every time the app comes back to the front.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update();
+    });
+  });
+  // A new version took over: reload once so it shows right away.
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController && !reloaded) {
+      reloaded = true;
+      location.reload();
+    }
+  });
 }
